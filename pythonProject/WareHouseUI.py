@@ -1,171 +1,168 @@
-import tkinter as tk
-from tkinter import messagebox
-import random
-import csv
+# displsy how many win/ loss/ tie on UI
+# put UI/ model into a seperate py file once have time
+
+import os.path
 import torch
+import torch.nn as nn
+import torch.nn.functional as F
+import pandas as pd
+import torch.optim as optim
+import numpy as np
+import random
+from shutil import copyfile
+from tkinter import *
+from tkinter import messagebox  
+
 from Model.DL_Network_Model import Net
 from Model.Gane_Agent import game_agent
 
-# Global variables for counters
-win_count = 0
-loss_count = 0
-tie_count = 0
+# self created lib in py file format
 
-# Load the model
 file_name_model_latest_version = 'Model/model_latest_version.pt'
-model_latest_version = Net()
-state_dict_latest_version = torch.load(file_name_model_latest_version)['state_dict']
-model_latest_version.load_state_dict(state_dict_latest_version)
 
-# Create main window
-root = tk.Tk()
-root.title("Warehouse Management")
+global game_result
+global tie
+global win
+global loss
+global data_original
+data_original = [0, 0, 0, 0, 0, 0, 0, 0, 0]
+global torch_tensor
+torch_tensor = torch.tensor(data_original, dtype=torch.float)
 
-# Warehouse dimensions
-rows, cols = 3, 3
+def refresh_game_board(data_original):
+    for i in range(0, 9):
+        if data_original[i] == -1:
+            game_board[i] = 'o'
+        elif data_original[i] == 1:
+            game_board[i] = 'x'
+        else:
+            game_board[i] = ''
+    btn_00_text.set(game_board[0])
+    btn_01_text.set(game_board[1])
+    btn_02_text.set(game_board[2])
+    btn_10_text.set(game_board[3])
+    btn_11_text.set(game_board[4])
+    btn_12_text.set(game_board[5])
+    btn_20_text.set(game_board[6])
+    btn_21_text.set(game_board[7])
+    btn_22_text.set(game_board[8])
 
-# Create a 2D array to store the state of the cells
-warehouse = [[None for _ in range(cols)] for _ in range(rows)]
+def btn_reset_clicked():
+    reset_game()
+    refresh_game_board(data_original)
 
-# Function to update the color of a cell based on its value
-def update_button_color(button, value):
-    if value == -1:
-        button.config(bg='green', highlightbackground='green')
-    elif value == 1:
-        button.config(bg='beige', highlightbackground='beige')
-    elif value == 2:
-        button.config(bg='red', highlightbackground='red')
-    else:
-        button.config(bg='gray', highlightbackground='gray')
+def predict_item(weight):
+    model_latest_version = Net()
+    state_dict_latest_version = torch.load(file_name_model_latest_version)['state_dict']
+    model_latest_version.load_state_dict(state_dict_latest_version)
 
-# Function to add an item to the warehouse
-def add_item():
-    global win_count, loss_count, tie_count
-    quantity = int(entry_quantity.get())
-    value = int(entry_value.get())
-    arr = [0, 0, 0, 0, 0, 0, 0, 0, 0]
-    torch_tensor = torch.tensor(value, dtype=torch.float).unsqueeze(0)
-    next_vision = model_latest_version(torch_tensor)
-    game_a = game_agent(torch_tensor, 0)
-    for k in range(9):
+    # Assume input tensor should be of length 9 for the model
+    input_tensor = torch.tensor([weight] * 9, dtype=torch.float)
+    
+    print('input_tensor:', input_tensor)
+    prediction = model_latest_version(input_tensor)
+    mask = torch.full_like(prediction, -float('inf'))
+    if weight == 0.5:
+        mask[0:3] = prediction[0:3]
+    elif weight == 1:
+        mask[3:6] = prediction[3:6]
+    elif weight == 1.5:
+        mask[6:9] = prediction[6:9]
+    print('prediction:', prediction)
+    
+    for k in range(0,9):
         if torch_tensor[k] != 0:
-            next_vision[k] = -1.1
-    next_step = next_vision.argmax().item()
-    print(next_vision)
-
-    # Simulate game result (for example purpose)
-    game_result = random.choice(["Win", "Loss", "Tie"])  # Replace with actual game result logic
-    if game_result == "Win":
-        win_count += 1
-    elif game_result == "Loss":
-        loss_count += 1
-    else:
-        tie_count += 1
-
-    # Update labels
-    win_label.config(text=f"Wins: {win_count}")
-    loss_label.config(text=f"Losses: {loss_count}")
-    tie_label.config(text=f"Ties: {tie_count}")
-
-    return next_step
-
-# Function to reset the warehouse to its initial state
-def reset_warehouse():
-    for i in range(rows):
-        for j in range(cols):
-            warehouse[i][j] = None
-            update_button_color(buttons[i][j], None)
-
-# Function to randomize items in the warehouse
-def randomize_items():
-    reset_warehouse()
-    values = [-1, 1, 2]
-    counts = {-1: min(5, 2 * cols), 1: min(5, 3 * cols), 2: min(5, 2 * cols)}
-
-    for value in values:
-        row_ranges = {-1: range(1, -1, -1), 1: range(4, 1, -1), 2: range(6, 4, -1)}
-        row_range = row_ranges[value]
-        remaining_count = counts[value]
-
-        positions = [(i, j) for i in row_range for j in range(cols) if warehouse[i][j] is None]
-        random.shuffle(positions)
-
-        for i, j in positions:
-            if remaining_count > 0:
-                warehouse[i][j] = value
-                update_button_color(buttons[i][j], value)
-                remaining_count -= 1
-            else:
-                break
-
-# Function to export warehouse data to CSV
-def export_warehouse():
-    with open('warehouse_export.csv', 'w', newline='') as csvfile:
-        writer = csv.writer(csvfile)
-        for row in warehouse:
-            writer.writerow(row)
-    messagebox.showinfo("Export", "Warehouse data exported to warehouse_export.csv")
-
-# Function to remove the closest item from the bottom up
-def remove_closest_item():
-    closest_item = None
-    closest_position = None
-
-    for i in range(rows - 1, -1, -1):
-        for j in range(cols):
-            if warehouse[i][j] is not None:
-                closest_item = warehouse[i][j]
-                closest_position = (i, j)
-                break
-        if closest_position:
+            mask[k] = -1.1
+    predicted_item = mask.argmax().item()
+    torch_tensor[predicted_item] = 1
+    print('torch_tensor:', torch_tensor)
+    return predicted_item
+def btn_submit_clicked():
+    input_value = float(input_text.get())
+    predicted_item = predict_item(input_value)
+    print('predicted_item:', predicted_item)
+    row = predicted_item // 3  # Integer division to find the row
+    column = predicted_item % 3 
+    print(row,column)
+    cell_filled = False
+    torch_tensor = torch.tensor(data_original, dtype=torch.float)
+    for _ in range(9):
+        if btn_text_vars[row][column].get() == '':
+            btn_text_vars[row][column].set(input_value)
+            torch_tensor[predicted_item] = -1
+            cell_filled = True
             break
+        predicted_item = (predicted_item + 1) % 9
+        row = predicted_item // 3
+        column = predicted_item % 3
+    torch_tensor[predicted_item] = 1
+    if not cell_filled:
+        print('Grid Full')
+        messagebox.showinfo("Grid Full")
 
-    if closest_position:
-        i, j = closest_position
-        warehouse[i][j] = None
-        update_button_color(buttons[i][j], None)
-        messagebox.showinfo("Remove Item", f"Removed item with value {closest_item} from position ({i}, {j})")
-    else:
-        messagebox.showinfo("Remove Item", "No items to remove")
+    return row,column
 
-# Create warehouse buttons
-warehouse_frame = tk.Frame(root)
-warehouse_frame.grid(row=0, column=0, padx=10, pady=10)
 
-buttons = [[None for _ in range(cols)] for _ in range(rows)]
-for i in range(rows):
-    for j in range(cols):
-        button = tk.Button(warehouse_frame, width=4, height=2, bg='gray', state=tk.NORMAL)
-        button.grid(row=i, column=j)
-        buttons[i][j] = button
+def reset_game():
+    global data_original
+    global game_board
+    data_original = [0, 0, 0, 0, 0, 0, 0, 0, 0]
+    game_board = ['', '', '', '', '', '', '', '', '']
+    global torch_tensor
+    torch_tensor = torch.tensor(data_original, dtype=torch.float)
 
-# Create input fields for quantity and value
-input_frame = tk.Frame(root)
-input_frame.grid(row=1, column=0, padx=10, pady=10)
+# Load game UI:
+window = Tk()
+window.title("Welcome to smart warehouse")
+window.geometry('700x600')
+lbl = Label(window, text="Input value:")
+lbl.grid(column=1, row=8)
 
-tk.Label(input_frame, text="Quantity:").grid(row=0, column=0, padx=5, pady=5)
-entry_quantity = tk.Entry(input_frame)
-entry_quantity.grid(row=0, column=1, padx=5, pady=5)
+btn_00_text = StringVar()
+btn_01_text = StringVar()
+btn_02_text = StringVar()
+btn_10_text = StringVar()
+btn_11_text = StringVar()
+btn_12_text = StringVar()
+btn_20_text = StringVar()
+btn_21_text = StringVar()
+btn_22_text = StringVar()
 
-tk.Label(input_frame, text="Value:").grid(row=0, column=2, padx=5, pady=5)
-entry_value = tk.Entry(input_frame)
-entry_value.grid(row=0, column=3, padx=5, pady=5)
+btn_text_vars = [[btn_00_text, btn_01_text, btn_02_text],
+                 [btn_10_text, btn_11_text, btn_12_text],
+                 [btn_20_text, btn_21_text, btn_22_text]]
 
-tk.Button(input_frame, text="Add Item", command=add_item).grid(row=0, column=4, padx=5, pady=5)
-tk.Button(input_frame, text="Reset", command=reset_warehouse).grid(row=0, column=5, padx=5, pady=5)
-tk.Button(input_frame, text="Random", command=randomize_items).grid(row=0, column=6, padx=5, pady=5)
-tk.Button(input_frame, text="Export", command=export_warehouse).grid(row=0, column=7, padx=5, pady=5)
-tk.Button(input_frame, text="Remove Closest", command=remove_closest_item).grid(row=0, column=8, padx=5, pady=5)
+btn_00 = Button(window, textvariable=btn_00_text,  height=2, width=4)
+btn_00.grid(row=0, column=0)
+btn_01 = Button(window, textvariable=btn_01_text,  height=2, width=4)
+btn_01.grid(row=0, column=1)
+btn_02 = Button(window, textvariable=btn_02_text,  height=2, width=4)
+btn_02.grid(row=0, column=2)
+btn_10 = Button(window, textvariable=btn_10_text,  height=2, width=4)
+btn_10.grid(row=1, column=0)
+btn_11 = Button(window, textvariable=btn_11_text,  height=2, width=4)
+btn_11.grid(row=1, column=1)
+btn_12 = Button(window, textvariable=btn_12_text,  height=2, width=4)
+btn_12.grid(row=1, column=2)
+btn_20 = Button(window, textvariable=btn_20_text,  height=2, width=4)
+btn_20.grid(row=2, column=0)
+btn_21 = Button(window, textvariable=btn_21_text,  height=2, width=4)
+btn_21.grid(row=2, column=1)
+btn_22 = Button(window, textvariable=btn_22_text, height=2, width=4)
+btn_22.grid(row=2, column=2)
+lbl.grid(row=4, column=3)
 
-# Create labels to display win, loss, and tie counters
-counter_frame = tk.Frame(root)
-counter_frame.grid(row=2, column=0, padx=10, pady=10)
 
-win_label = tk.Label(counter_frame, text=f"Wins: {win_count}")
-win_label.grid(row=0, column=0, padx=5, pady=5)
-loss_label = tk.Label(counter_frame, text=f"Losses: {loss_count}")
-loss_label.grid(row=0, column=1, padx=5, pady=5)
-tie_label = tk.Label(counter_frame, text=f"Ties: {tie_count}")
-tie_label.grid(row=0, column=2, padx=5, pady=5)
+input_text = StringVar()
+input_entry = Entry(window, textvariable=input_text)
+input_entry.grid(row=8, column=3)
+# button to restart
+btn_reset = Button(window, text='Restart', command=btn_reset_clicked, justify=LEFT, height=2, width=8)
+btn_reset.grid(row=8, column=5)
+btn_submit = Button(window, text='submit', command=btn_submit_clicked, justify=LEFT, height=2, width=8)
+btn_submit.grid(row=8, column=4)
 
-root.mainloop()
+reset_game()
+
+
+window.mainloop()

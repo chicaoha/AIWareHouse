@@ -4,6 +4,7 @@ import torch.nn as nn
 import torch.optim as optim
 import numpy as np
 import pandas as pd
+import random as rd
 from shutil import copyfile
 
 from Model.DL_Network_Model import Net
@@ -26,12 +27,12 @@ device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 # Parameter setup
 button = 1
 train_model_from_crash = 0
-main_loop_count = 20
+main_loop_count = 5
 epoch_size = 3000
 steps_for_printing_out_loss = 1000
 learning_rate = 0.2
-DQ_ratio = 0.75
-
+DQ_ratio = 0.75 
+weights = [0.5, 1, 1.5]
 
 def Training_model():
     if os.path.isfile(file_name_model_latest_version):
@@ -77,14 +78,9 @@ def Training_model():
 
 
 def RL_model():
-    tie = 0
     win = 0
     loss = 0
-    not_valid_start = 0
-
-    model_last_version = Net().to(device)
-    state_dict_last_version = torch.load(file_name_model_last_version)['state_dict']
-    model_last_version.load_state_dict(state_dict_last_version)
+    
 
     model_latest_version = Net().to(device)
     state_dict_latest_version = torch.load(file_name_model_latest_version)['state_dict']
@@ -102,53 +98,48 @@ def RL_model():
             for j in range(9):
                 if j == model_sequence:
                     game_a = game_agent(torch_tensor, 0)
-                    if game_a.verify_result():
-                        print('not valid input, as game has been over')
-                        not_valid_start += 1
-                        break
-                    elif 0 not in torch_tensor:
-                        print('input tie & with 9 value')
-                        not_valid_start += 1
-                        break
+                   
 
+                weight = weights[(model_sequence +j) % 3] 
+                # weight = rd.choice(weights) 
                 torch_tensor_saved = torch_tensor.clone()
                 input_status.append(torch_tensor_saved.cpu().numpy())
 
-                if j % 2 == model_sequence:
-                    next_vision = model_latest_version(torch_tensor)
-                else:
-                    next_vision = model_last_version(torch_tensor)
+                
+                next_vision = model_latest_version(torch_tensor)
+               
 
                 current_score = torch.ones(9, device=device) * -2
                 for k in range(9):
                     if torch_tensor[k] != 0:
                         next_vision[k] = -1.1
-                        current_score[k] = -1.1
+                        # current_score[k] = -1.1
                 next_step = next_vision.argmax()
 
                 next_action_taken.append(next_step.cpu().numpy())
-                score.append(current_score.cpu().numpy())
+                # score.append(current_score.cpu().numpy())
 
                 torch_tensor[next_step] = 1
                 game_a = game_agent(torch_tensor, 0)
-                if game_a.verify_result():
-                    if j % 2 == 0:
-                        win += 1
-                    else:
-                        loss += 1
-                    current_final_score = 1
-                    for k in range(len(next_action_taken)):
-                        score[-(k + 1)][next_action_taken[-(k + 1)]] = ((-1 * DQ_ratio) ** k)
-                    break
+                result = game_a.verify_result_weight(next_vision, weight, next_step)
+                if result:
+                    current_score[next_step] = 1.1
+                    score.append(current_score.cpu().numpy())
+                    win += 1
                 else:
-                    if 0 not in torch_tensor:
-                        tie += 1
-                        current_final_score = 0
-                        for k in range(len(next_action_taken)):
-                            score[-(k + 1)][next_action_taken[-(k + 1)]] = ((-1 * DQ_ratio) ** k)
-                        break
-                    else:
-                        torch_tensor *= -1
+                    current_score[next_step] = -2.2
+                    score.append(current_score.cpu().numpy())
+                    loss += 1
+                    
+                if game_a.verify_result():
+                    for k in range(len(next_action_taken)):
+                        if score[-(k + 1)][next_action_taken[-(k + 1)]] > 0:
+                            score[-(k + 1)][next_action_taken[-(k + 1)]] += ((-1 + DQ_ratio) ** k)
+                        else:
+                            score[-(k + 1)][next_action_taken[-(k + 1)]] -= ((-1 * DQ_ratio) ** k)                    
+                else:
+                    torch_tensor *= -1
+                    
 
             input_status_df = pd.DataFrame(input_status)
             input_status_df.to_csv(input_file_path, index=False, mode='a', header=False)
@@ -172,8 +163,6 @@ def RL_model():
 
     print("win:", win)
     print("Loss:", loss)
-    print("Tie:", tie)
-    print("Not valid start:", not_valid_start)
 
 
 if train_model_from_crash == 1:

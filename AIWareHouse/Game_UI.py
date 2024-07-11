@@ -56,10 +56,10 @@ def update_display(frame):
     for i in range(ROWS):
         for j in range(COLS):
             game_board[i][j].set(str(frame[i][j]))
-            color = ITEM_COLORS.get(frame[i][j], 'white')
+            color = ITEM_COLORS.get(frame[i][j], 'green')
             buttons[i][j].config(bg=color)
             print(f"Updated cell ({i},{j}) to {frame[i][j]} with color {color}")
-    window.update_idletasks()
+            window.update_idletasks()
 
 def make_move():
     try:
@@ -103,7 +103,7 @@ entry_widget.grid(row=ROWS+1, column=0, columnspan=COLS)
 
 # Button to start the moves
 start_button = Button(window, text="Start", command=make_move)
-start_button.grid(row=ROWS+3, columnspan=COLS)
+start_button.grid(row=ROWS+2, columnspan=COLS)
 
 # Start the Tkinter main loop
 window.mainloop()
