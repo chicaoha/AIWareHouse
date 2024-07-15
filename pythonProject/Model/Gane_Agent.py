@@ -7,39 +7,6 @@ class game_agent:
         self.verify_Matrix = [[0,1,2],[3,4,5],[6,7,8],[0,3,6],[1,4,7],[2,5,8],[0,4,8],[2,4,6]]
         self.verify_Matrix = np.array(self.verify_Matrix)
         
-        #print(self.verify_Matrix.argmax())
-    def restart(self):
-        print(self.input_string)
-        return('abc')
-    def next_action(self):
-        print('next action')
-    def result(self):
-        if self.input_string[1,1] == 1:
-            return True
-        else:
-            return False
-    def check_placement(self,location, weight):
-        min_weight, max_weight = self.weight_ranges.get(location,(None,None))
-        if min_weight is not None and max_weight is not None:
-            if min_weight <= weight <= max_weight:
-                return True
-            else:
-                return False
-    def score_placement(self, location, weight):
-        return 1 if self.check_placement(location, weight) else -1
-    # def verify_result(self):
-    #     status = False
-    #     for i in range(0,8):
-    #         a = self.input_string[self.verify_Matrix[i,0]]
-    #         b = self.input_string[self.verify_Matrix[i,1]]
-    #         c = self.input_string[self.verify_Matrix[i,2]]
-    #         # print(a,b,c)
-    #         if verify_3_same_value(a,b,c) == True:
-    #             #print(1)
-    #             #print(a,b,c)
-    #             status = True
-    #             break
-    #     return status
     def verify_result(self):
         status = False
         if 0 not in self.input_string:

@@ -68,6 +68,8 @@ def predict_item(weight):
         mask[3:6] = prediction[3:6]
     elif weight == 1.5:
         mask[6:9] = prediction[6:9]
+        if all(torch_tensor[6:9] != 0):
+            mask[3:6] = prediction[3:6]
     print('prediction:', prediction)
     
     for k in range(0,9):
