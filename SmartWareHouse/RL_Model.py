@@ -35,7 +35,7 @@ weights = [0.5, 1, 1.5]
 
 def Training_model():
 
-    indicator = 0
+    indicator = 1
     input_data = data_input(input_file_path).to(device)
     score_data = data_input(score_file_path).to(device)
     
@@ -142,14 +142,14 @@ def RL_model():
             score_df = pd.DataFrame(score)
             score_df.to_csv(score_file_path, index=False, mode='a', header=False)
 
-    input_status_df = pd.read_csv(input_file_path, header=None, error_bad_lines=False, warn_bad_lines=True)
-    score_df = pd.read_csv(score_file_path, header=None)
+    input_status_df = pd.read_csv(input_file_path, header=None, on_bad_lines='skip')
+    score_df = pd.read_csv(score_file_path, header=None,on_bad_lines='skip')
     consul_df = pd.concat([input_status_df, next_action_taken_df, score_df], axis=1)
     consul_df = consul_df.replace(-0.0, 0.0)
     consul_df.drop_duplicates(keep='first', inplace=True)
-    input_status_df = consul_df.iloc[:, 0:9].copy()
-    next_action_taken_df = consul_df.iloc[:, 9:10].copy()
-    score_df = consul_df.iloc[:, 10:].copy()
+    input_status_df = consul_df.iloc[:, 0:98].copy()
+    next_action_taken_df = consul_df.iloc[:, 98:99].copy()
+    score_df = consul_df.iloc[:, 99:].copy()
     input_status_df.to_csv(input_file_path, index=False, header=False)
     next_action_taken_df.to_csv(next_action_file_path, index=False, header=False)
     score_df.to_csv(score_file_path, index=False, header=False)

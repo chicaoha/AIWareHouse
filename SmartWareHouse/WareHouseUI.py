@@ -25,27 +25,22 @@ global tie
 global win
 global loss
 global data_original
-data_original = [0, 0, 0, 0, 0, 0, 0, 0, 0]
+data_original = [0]* 98
 global torch_tensor
 torch_tensor = torch.tensor(data_original, dtype=torch.float)
 
 def refresh_game_board(data_original):
-    for i in range(0, 9):
+    for i in range(0, 98):
         if data_original[i] == -1:
             game_board[i] = 'o'
         elif data_original[i] == 1:
             game_board[i] = 'x'
         else:
             game_board[i] = ''
-    btn_00_text.set(game_board[0])
-    btn_01_text.set(game_board[1])
-    btn_02_text.set(game_board[2])
-    btn_10_text.set(game_board[3])
-    btn_11_text.set(game_board[4])
-    btn_12_text.set(game_board[5])
-    btn_20_text.set(game_board[6])
-    btn_21_text.set(game_board[7])
-    btn_22_text.set(game_board[8])
+    for row in range(7):
+        for col in range(14):
+            btn_text_vars[row][col].set(game_board[row * 14 + col])
+            buttons[row][col].config(bg='white',highlightbackground='white', highlightcolor='white')
 
 def btn_reset_clicked():
     reset_game()
@@ -57,46 +52,54 @@ def predict_item(weight):
     model_latest_version.load_state_dict(state_dict_latest_version)
 
     # Assume input tensor should be of length 9 for the model
-    input_tensor = torch.tensor([weight] * 9, dtype=torch.float)
+    input_tensor = torch.tensor([weight] * 98, dtype=torch.float)
     
     print('input_tensor:', input_tensor)
     prediction = model_latest_version(input_tensor)
     mask = torch.full_like(prediction, -float('inf'))
     if weight == 0.5:
-        mask[0:3] = prediction[0:3]
+        mask[0:27] = prediction[0:27]
     elif weight == 1:
-        mask[3:6] = prediction[3:6]
+        mask[28:69] = prediction[28:69]
     elif weight == 1.5:
-        mask[6:9] = prediction[6:9]
-        if all(torch_tensor[6:9] != 0):
-            mask[3:6] = prediction[3:6]
+        mask[70:97] = prediction[70:97]
+        if all(torch_tensor[70:97] != 0):
+            mask[28:69] = prediction[28:69]
     print('prediction:', prediction)
     
-    for k in range(0,9):
+    for k in range(0,98):
         if torch_tensor[k] != 0:
-            mask[k] = -1.1
+            mask[k] = -float('inf')
     predicted_item = mask.argmax().item()
     torch_tensor[predicted_item] = 1
     print('torch_tensor:', torch_tensor)
     return predicted_item
+
 def btn_submit_clicked():
     input_value = float(input_text.get())
     predicted_item = predict_item(input_value)
     print('predicted_item:', predicted_item)
-    row = predicted_item // 3  # Integer division to find the row
-    column = predicted_item % 3 
-    print(row,column)
+    row = predicted_item // 14  # Integer division to find the row
+    column = predicted_item % 14 
+    print(f"row: {row}, column: {column}")
     cell_filled = False
     torch_tensor = torch.tensor(data_original, dtype=torch.float)
-    for _ in range(9):
+    for _ in range(98):
         if btn_text_vars[row][column].get() == '':
             btn_text_vars[row][column].set(input_value)
+            if input_value == 0.5:
+                color = 'green'
+            elif input_value == 1:
+                color = 'yellow'
+            elif input_value == 1.5:
+                color = 'red'
+            buttons[row][column].config(bg=color,highlightbackground=color, highlightcolor=color)
             torch_tensor[predicted_item] = -1
             cell_filled = True
             break
-        predicted_item = (predicted_item + 1) % 9
-        row = predicted_item // 3
-        column = predicted_item % 3
+        predicted_item = (predicted_item + 1) % 98
+        row = predicted_item // 14
+        column = predicted_item % 14
     torch_tensor[predicted_item] = 1
     if not cell_filled:
         print('Grid Full')
@@ -108,63 +111,42 @@ def btn_submit_clicked():
 def reset_game():
     global data_original
     global game_board
-    data_original = [0, 0, 0, 0, 0, 0, 0, 0, 0]
-    game_board = ['', '', '', '', '', '', '', '', '']
+    data_original = [0] * 98
+    game_board = [''] * 98
     global torch_tensor
     torch_tensor = torch.tensor(data_original, dtype=torch.float)
 
 # Load game UI:
 window = Tk()
 window.title("Welcome to smart warehouse")
-window.geometry('700x600')
+window.geometry('1500x600')
 lbl = Label(window, text="Input value:")
-lbl.grid(column=1, row=8)
+lbl.grid(column=16, row=2)
 
-btn_00_text = StringVar()
-btn_01_text = StringVar()
-btn_02_text = StringVar()
-btn_10_text = StringVar()
-btn_11_text = StringVar()
-btn_12_text = StringVar()
-btn_20_text = StringVar()
-btn_21_text = StringVar()
-btn_22_text = StringVar()
-
-btn_text_vars = [[btn_00_text, btn_01_text, btn_02_text],
-                 [btn_10_text, btn_11_text, btn_12_text],
-                 [btn_20_text, btn_21_text, btn_22_text]]
-
-btn_00 = Button(window, textvariable=btn_00_text,  height=2, width=4)
-btn_00.grid(row=0, column=0)
-btn_01 = Button(window, textvariable=btn_01_text,  height=2, width=4)
-btn_01.grid(row=0, column=1)
-btn_02 = Button(window, textvariable=btn_02_text,  height=2, width=4)
-btn_02.grid(row=0, column=2)
-btn_10 = Button(window, textvariable=btn_10_text,  height=2, width=4)
-btn_10.grid(row=1, column=0)
-btn_11 = Button(window, textvariable=btn_11_text,  height=2, width=4)
-btn_11.grid(row=1, column=1)
-btn_12 = Button(window, textvariable=btn_12_text,  height=2, width=4)
-btn_12.grid(row=1, column=2)
-btn_20 = Button(window, textvariable=btn_20_text,  height=2, width=4)
-btn_20.grid(row=2, column=0)
-btn_21 = Button(window, textvariable=btn_21_text,  height=2, width=4)
-btn_21.grid(row=2, column=1)
-btn_22 = Button(window, textvariable=btn_22_text, height=2, width=4)
-btn_22.grid(row=2, column=2)
-lbl.grid(row=4, column=3)
-
+buttons = []
+btn_text_vars = []
+for row in range(7):
+    btn_row = []
+    var_row = []
+    for col in range(14):
+        btn_text = StringVar()
+        button = Button(window, textvariable=btn_text, width=4, height=2, font=('Helvetica', '20'))
+        button.grid(row=row, column=col)
+        btn_row.append(button)
+        var_row.append(btn_text)
+    buttons.append(btn_row)
+    btn_text_vars.append(var_row)
 
 input_text = StringVar()
 input_entry = Entry(window, textvariable=input_text)
-input_entry.grid(row=8, column=3)
+input_entry.grid(row=3, column=16)
 # button to restart
 btn_reset = Button(window, text='Restart', command=btn_reset_clicked, justify=LEFT, height=2, width=8)
-btn_reset.grid(row=8, column=5)
+btn_reset.grid(row=5, column=16)
 btn_submit = Button(window, text='submit', command=btn_submit_clicked, justify=LEFT, height=2, width=8)
-btn_submit.grid(row=8, column=4)
+btn_submit.grid(row=5, column=17)
 
-reset_game()
+# reset_game()
 
 
 window.mainloop()
